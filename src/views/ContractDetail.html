@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<?!= include('views/shared/Styles') ?>
+</head>
+<body>
+<?!= include('views/shared/Nav') ?>
+
+<div class="container">
+
+<? if (!contract) { ?>
+<div class="card" style="text-align:center;padding:3rem">
+  <p style="color:var(--gray-500)">契約が見つかりません。<a href="?view=dashboard">ダッシュボードへ戻る</a></p>
+</div>
+<? } else { ?>
+
+<?
+var STATUS_LABEL_MAP = {
+  draft: '作成中',
+  internal_signing: '社内署名待ち',
+  external_signing: '相手先署名待ち',
+  signed: '締結済',
+  rejected: '却下'
+};
+var statusLabel = STATUS_LABEL_MAP[contract.status] || contract.status;
+var canEdit = currentUser.canEdit;
+var isDraft = contract.status === 'draft';
+var isInternalSigning = contract.status === 'internal_signing';
+var isExternalSigning = contract.status === 'external_signing';
+var isSigned = contract.status === 'signed';
+var isRejected = contract.status === 'rejected';
+var canWithdraw = canEdit && (isInternalSigning || isExternalSigning);
+var canSend = canEdit && isDraft;
+?>
+
+<div id="alert-area"></div>
+
+<!-- header -->
+<div class="page-header">
+  <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+    <a href="?view=dashboard" class="btn btn-secondary btn-sm">← 一覧</a>
+    <h1 class="page-title"><?= contract.id ?></h1>
+    <span class="badge badge-<?= contract.status ?>"><?= statusLabel ?></span>
+  </div>
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+    <? if (canSend) { ?>
+    <button class="btn btn-primary" onclick="sendSignatureRequest()">署名依頼を送信</button>
+    <? } ?>
+    <? if (canWithdraw) { ?>
+    <button class="btn btn-secondary" onclick="sendReminder()">リマインダーを送る</button>
+    <button class="btn btn-danger" onclick="withdrawContract()">取り下げ</button>
+    <? } ?>
+    <? if (contract.doc_id) { ?>
+    <a class="btn btn-secondary" href="https://docs.google.com/document/d/<?= contract.doc_id ?>/edit" target="_blank">Docs で開く</a>
+    <? } ?>
+    <? if (contract.folder_id) { ?>
+    <a class="btn btn-secondary" href="https://drive.google.com/drive/folders/<?= contract.folder_id ?>" target="_blank">Drive フォルダ</a>
+    <? } ?>
+  </div>
+</div>
+
+<!-- main layout: 2 columns -->
+<div style="display:grid;grid-template-columns:1fr 320px;gap:1.5rem;align-items:start">
+
+  <!-- LEFT: contract details -->
+  <div>
+    <div class="card" style="margin-bottom:1rem">
+      <h2 style="font-size:1rem;font-weight:700;margin-bottom:1rem"><?= contract.title ?></h2>
+      <table style="width:100%;border-collapse:collapse">
+        <tbody>
+          <?
+          function detailRow(label, value) {
+            if (!value) return '';
+            return '<tr><td style="width:140px;font-size:.8rem;font-weight:600;color:var(--gray-500);padding:.5rem 0;border-bottom:1px solid var(--gray-100);text-transform:uppercase;letter-spacing:.04em">' + label +
+                   '</td><td style="padding:.5rem .5rem;border-bottom:1px solid var(--gray-100);font-size:.875rem">' + value + '</td></tr>';
+          }
+          ?>
+          <?!= detailRow('相手先', contract.counterparty_name + (contract.counterparty_rep ? ' / ' + contract.counterparty_rep : '')) ?>
+          <?!= detailRow('相手先署名者', contract.counterparty_signer_name + ' &lt;' + contract.counterparty_signer_email + '&gt;') ?>
+          <?!= detailRow('社内署名者', contract.internal_signer_name + ' &lt;' + contract.internal_signer_email + '&gt;') ?>
+          <?!= detailRow('作成者', contract.creator_email) ?>
+          <?!= detailRow('作成日時', contract.created_at ? String(contract.created_at).slice(0,19).replace('T',' ') : '') ?>
+          <? if (contract.sent_at) { ?><?!= detailRow('送信日時', String(contract.sent_at).slice(0,19).replace('T',' ')) ?><? } ?>
+          <? if (contract.internal_signed_at) { ?><?!= detailRow('社内署名日時', String(contract.internal_signed_at).slice(0,19).replace('T',' ')) ?><? } ?>
+          <? if (contract.counterparty_signed_at) { ?><?!= detailRow('相手先署名日時', String(contract.counterparty_signed_at).slice(0,19).replace('T',' ')) ?><? } ?>
+          <? if (contract.completed_at) { ?><?!= detailRow('締結完了日時', String(contract.completed_at).slice(0,19).replace('T',' ')) ?><? } ?>
+          <? if (contract.notes) { ?><?!= detailRow('備考', contract.notes) ?><? } ?>
+          <? if (contract.tags) { ?><?!= detailRow('タグ', contract.tags) ?><? } ?>
+        </tbody>
+      </table>
+    </div>
+
+    <? if (contract.template_variables && Object.keys(contract.template_variables).length > 0) { ?>
+    <div class="card" style="margin-bottom:1rem">
+      <h3 style="font-size:.875rem;font-weight:700;margin-bottom:.75rem;color:var(--gray-700)">テンプレート変数</h3>
+      <table style="width:100%;border-collapse:collapse">
+        <tbody>
+        <? var tv = contract.template_variables; var tvkeys = Object.keys(tv); for (var k=0; k<tvkeys.length; k++) { ?>
+        <tr>
+          <td style="width:160px;font-size:.8rem;font-weight:600;color:var(--gray-500);padding:.375rem 0;border-bottom:1px solid var(--gray-100)">{{<?= tvkeys[k] ?>}}</td>
+          <td style="padding:.375rem .5rem;border-bottom:1px solid var(--gray-100);font-size:.875rem"><?= tv[tvkeys[k]] ?></td>
+        </tr>
+        <? } ?>
+        </tbody>
+      </table>
+    </div>
+    <? } ?>
+
+    <!-- phase 3 placeholder for eSignature status -->
+    <? if (isInternalSigning || isExternalSigning) { ?>
+    <div class="card" style="margin-bottom:1rem;border-left:3px solid var(--primary)">
+      <p style="font-size:.875rem;color:var(--gray-700)">
+        <strong>署名状態:</strong>
+        <? if (isInternalSigning) { ?> 社内署名者 (<?= contract.internal_signer_name ?>) の署名を待っています。
+        <? } else { ?> 相手先 (<?= contract.counterparty_signer_name ?>) の署名を待っています。
+        <? } ?>
+      </p>
+      <? if (canEdit) { ?>
+      <button class="btn btn-secondary btn-sm" style="margin-top:.75rem" id="sync-btn" onclick="syncStatus()">状態を再同期</button>
+      <? } ?>
+    </div>
+    <? } ?>
+  </div>
+
+  <!-- RIGHT: audit log -->
+  <div>
+    <div class="card" style="padding:1rem">
+      <h3 style="font-size:.875rem;font-weight:700;margin-bottom:.75rem">操作履歴</h3>
+      <? if (contractLogs.length === 0) { ?>
+      <p class="text-muted text-sm">履歴がありません</p>
+      <? } else { ?>
+      <div style="display:flex;flex-direction:column;gap:.75rem">
+        <? for (var i=0; i<contractLogs.length; i++) { var log = contractLogs[i]; ?>
+        <div style="border-bottom:1px solid var(--gray-100);padding-bottom:.75rem">
+          <div style="font-size:.8rem;font-weight:600;color:var(--gray-700)"><?= log.description || log.action ?></div>
+          <div class="text-muted text-sm"><?= log.actor_email ?></div>
+          <div class="text-muted text-sm"><?= log.timestamp ? String(log.timestamp).slice(0,19).replace('T',' ') : '' ?></div>
+        </div>
+        <? } ?>
+      </div>
+      <? } ?>
+    </div>
+  </div>
+</div>
+
+<? } // end if contract ?>
+</div>
+
+<?!= include('views/shared/ConfirmModal') ?>
+
+<script>
+var CONTRACT_ID = '<?= contract ? contract.id : '' ?>';
+
+function sendSignatureRequest() {
+  ConfirmModal.show({
+    title: '署名依頼を送信しますか？',
+    description: '送信後は契約内容を変更できません。社内署名者にメールが届きます。',
+    confirmLabel: '送信する',
+    onConfirm: function() {
+      setLoading(true);
+      google.script.run
+        .withSuccessHandler(function() { location.reload(); })
+        .withFailureHandler(showError)
+        .callServer('sendSignatureRequest', { id: CONTRACT_ID });
+    }
+  });
+}
+
+function withdrawContract() {
+  ConfirmModal.show({
+    title: '契約を取り下げますか？',
+    description: 'この操作は取り消せません。進行中の署名依頼もキャンセルされます。',
+    confirmLabel: '取り下げる',
+    confirmStyle: 'danger',
+    requireReason: true,
+    onConfirm: function(reason) {
+      setLoading(true);
+      google.script.run
+        .withSuccessHandler(function() { location.reload(); })
+        .withFailureHandler(function(e) { setLoading(false); showError(e); })
+        .callServer('withdrawContract', { id: CONTRACT_ID, reason: reason });
+    }
+  });
+}
+
+function sendReminder() {
+  ConfirmModal.show({
+    title: 'リマインダーを送信しますか？',
+    description: '現在署名待ちの署名者にリマインダーメールを送ります。',
+    confirmLabel: '送信する',
+    onConfirm: function() {
+      setLoading(true);
+      google.script.run
+        .withSuccessHandler(function() {
+          setLoading(false);
+          showAlert('リマインダーを送信しました。', 'success');
+        })
+        .withFailureHandler(function(e) { setLoading(false); showError(e); })
+        .callServer('sendReminder', { id: CONTRACT_ID });
+    }
+  });
+}
+
+function syncStatus() {
+  var btn = document.getElementById('sync-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '同期中…'; }
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.changed) {
+        location.reload();
+      } else {
+        if (btn) { btn.disabled = false; btn.textContent = '状態を再同期'; }
+        showAlert('ステータスに変更はありませんでした。', 'info');
+      }
+    })
+    .withFailureHandler(function(e) {
+      if (btn) { btn.disabled = false; btn.textContent = '状態を再同期'; }
+      showError(e);
+    })
+    .callServer('syncContractStatus', { id: CONTRACT_ID });
+}
+
+function setLoading(on) {
+  document.querySelectorAll('.btn').forEach(function(b) { b.disabled = on; });
+}
+
+function showError(e) {
+  setLoading(false);
+  showAlert('エラー: ' + e.message, 'error');
+}
+
+function showAlert(msg, type) {
+  var a = document.getElementById('alert-area');
+  if (!a) return;
+  var cls = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+  a.innerHTML = '<div class="alert alert-' + cls + '">' + msg + '</div>';
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "gassign",
+  "version": "1.0.0",
+  "description": "Google Workspace contract management system powered by Google Apps Script",
+  "scripts": {
+    "lint": "eslint 'src/**/*.gs' --ext .gs",
+    "lint:fix": "eslint 'src/**/*.gs' --ext .gs --fix"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "eslint-plugin-googleappsscript": "^1.0.4"
+  },
+  "license": "MIT"
+}

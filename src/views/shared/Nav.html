@@ -1,0 +1,12 @@
+<nav class="nav">
+  <a class="nav-brand" href="?view=dashboard">gassign</a>
+  <div class="nav-links">
+    <a class="nav-link <?= params.view === 'dashboard' || !params.view ? 'active' : '' ?>" href="?view=dashboard">ダッシュボード</a>
+    <? if (currentUser.canEdit) { ?>
+    <a class="nav-link <?= params.view === 'templates' ? 'active' : '' ?>" href="?view=templates">テンプレート</a>
+    <a class="nav-link <?= params.view === 'audit' ? 'active' : '' ?>" href="?view=audit">監査ログ</a>
+    <a class="nav-link <?= params.view === 'editors' ? 'active' : '' ?>" href="?view=editors">エディタ管理</a>
+    <? } ?>
+  </div>
+  <span class="nav-user"><?= currentUser.email ?></span>
+</nav>

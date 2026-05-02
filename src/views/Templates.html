@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<?!= include('views/shared/Styles') ?>
+</head>
+<body>
+<?!= include('views/shared/Nav') ?>
+
+<div class="container">
+  <div class="page-header">
+    <h1 class="page-title">テンプレート管理</h1>
+    <button class="btn btn-primary" onclick="openForm()">＋ テンプレートを追加</button>
+  </div>
+
+  <div id="alert-area"></div>
+
+  <!-- create / edit form (hidden by default) -->
+  <div id="template-form-card" class="card" style="display:none;margin-bottom:1.5rem">
+    <h3 id="form-title" style="font-size:.9rem;font-weight:700;margin-bottom:1rem">テンプレートを追加</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="form-group">
+        <label class="required">テンプレート名</label>
+        <input type="text" id="f-name" placeholder="例: 業務委託基本契約書">
+      </div>
+      <div class="form-group">
+        <label>カテゴリ</label>
+        <input type="text" id="f-category" placeholder="例: 委託契約、秘密保持">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="required">Google Docs ファイル ID</label>
+      <input type="text" id="f-docsid" placeholder="1AbCdEfGhIjKlMnOpQrStUvWxYz...">
+      <p class="form-hint">Google Docs の URL の <code>/d/</code> と <code>/edit</code> の間の文字列です。</p>
+    </div>
+    <div class="form-group">
+      <label>説明</label>
+      <input type="text" id="f-description" placeholder="このテンプレートの用途や注意事項">
+    </div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem">
+      <button class="btn btn-secondary" onclick="closeForm()">キャンセル</button>
+      <button class="btn btn-primary" id="form-submit-btn" onclick="submitForm()">保存</button>
+    </div>
+    <input type="hidden" id="f-editing-id">
+  </div>
+
+  <!-- template table -->
+  <div class="card" style="padding:0">
+    <? if (templates.length === 0) { ?>
+    <div class="empty">
+      <div style="font-size:2rem">📋</div>
+      <p>テンプレートがまだありません</p>
+      <button class="btn btn-primary" style="margin-top:1rem" onclick="openForm()">最初のテンプレートを追加</button>
+    </div>
+    <? } else { ?>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>テンプレート名</th>
+            <th>カテゴリ</th>
+            <th>説明</th>
+            <th>使用回数</th>
+            <th>状態</th>
+            <th style="width:140px"></th>
+          </tr>
+        </thead>
+        <tbody id="template-tbody">
+          <? for (var i = 0; i < templates.length; i++) { var t = templates[i]; ?>
+          <tr id="row-<?= t.template_id ?>">
+            <td class="text-muted text-sm"><?= t.template_id ?></td>
+            <td>
+              <a href="https://docs.google.com/document/d/<?= t.docs_id ?>/edit" target="_blank" style="font-weight:500">
+                <?= t.name ?>
+              </a>
+            </td>
+            <td class="text-muted text-sm"><?= t.category || '—' ?></td>
+            <td class="text-muted text-sm"><?= t.description || '—' ?></td>
+            <td class="text-sm" style="text-align:center"><?= t.usage_count ?></td>
+            <td>
+              <? if (t.active) { ?>
+              <span class="badge" style="background:#dcfce7;color:#166534">有効</span>
+              <? } else { ?>
+              <span class="badge badge-rejected">無効</span>
+              <? } ?>
+            </td>
+            <td>
+              <div style="display:flex;gap:.25rem">
+                <button class="btn btn-secondary btn-sm"
+                  onclick='openEditForm(<?= JSON.stringify(t) ?>)'>編集</button>
+                <? if (t.active) { ?>
+                <button class="btn btn-danger btn-sm"
+                  onclick="deleteTemplate('<?= t.template_id ?>', '<?= t.name ?>')">削除</button>
+                <? } ?>
+              </div>
+            </td>
+          </tr>
+          <? } ?>
+        </tbody>
+      </table>
+    </div>
+    <? } ?>
+  </div>
+</div>
+
+<?!= include('views/shared/ConfirmModal') ?>
+
+<script>
+var editingId = null;
+
+function openForm() {
+  editingId = null;
+  document.getElementById('f-editing-id').value = '';
+  document.getElementById('form-title').textContent = 'テンプレートを追加';
+  document.getElementById('form-submit-btn').textContent = '追加';
+  ['f-name','f-category','f-docsid','f-description'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('template-form-card').style.display = '';
+  document.getElementById('f-name').focus();
+}
+
+function openEditForm(t) {
+  editingId = t.template_id;
+  document.getElementById('f-editing-id').value = t.template_id;
+  document.getElementById('form-title').textContent = 'テンプレートを編集: ' + t.template_id;
+  document.getElementById('form-submit-btn').textContent = '更新';
+  document.getElementById('f-name').value = t.name || '';
+  document.getElementById('f-category').value = t.category || '';
+  document.getElementById('f-docsid').value = t.docs_id || '';
+  document.getElementById('f-description').value = t.description || '';
+  document.getElementById('template-form-card').style.display = '';
+  document.getElementById('f-name').focus();
+}
+
+function closeForm() {
+  document.getElementById('template-form-card').style.display = 'none';
+  clearAlert();
+}
+
+function submitForm() {
+  var name   = document.getElementById('f-name').value.trim();
+  var docsId = document.getElementById('f-docsid').value.trim();
+  if (!name)   { showAlert('テンプレート名を入力してください', 'error'); return; }
+  if (!docsId) { showAlert('Docs ファイル ID を入力してください', 'error'); return; }
+
+  var btn = document.getElementById('form-submit-btn');
+  btn.disabled = true;
+
+  var params = {
+    name:        name,
+    category:    document.getElementById('f-category').value.trim(),
+    docs_id:     docsId,
+    description: document.getElementById('f-description').value.trim()
+  };
+
+  if (editingId) {
+    google.script.run
+      .withSuccessHandler(function() { location.reload(); })
+      .withFailureHandler(function(e) { btn.disabled = false; showAlert(e.message, 'error'); })
+      .callServer('updateTemplate', { id: editingId, params: params });
+  } else {
+    google.script.run
+      .withSuccessHandler(function() { location.reload(); })
+      .withFailureHandler(function(e) { btn.disabled = false; showAlert(e.message, 'error'); })
+      .callServer('createTemplate', { params: params });
+  }
+}
+
+function deleteTemplate(id, name) {
+  ConfirmModal.show({
+    title: 'テンプレートを削除しますか？',
+    description: '「' + name + '」を無効化します。過去の契約への参照は保持されます。',
+    confirmLabel: '削除する',
+    confirmStyle: 'danger',
+    onConfirm: function() {
+      google.script.run
+        .withSuccessHandler(function() { location.reload(); })
+        .withFailureHandler(function(e) { showAlert(e.message, 'error'); })
+        .callServer('deleteTemplate', { id: id });
+    }
+  });
+}
+
+function showAlert(msg, type) {
+  document.getElementById('alert-area').innerHTML =
+    '<div class="alert alert-' + (type === 'error' ? 'error' : 'success') + '">' + msg + '</div>';
+}
+function clearAlert() { document.getElementById('alert-area').innerHTML = ''; }
+</script>
+</body>
+</html>

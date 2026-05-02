@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<?!= include('views/shared/Styles') ?>
+</head>
+<body>
+<?!= include('views/shared/Nav') ?>
+
+<div class="container" style="max-width:760px">
+  <div class="page-header">
+    <h1 class="page-title">エディタ管理</h1>
+  </div>
+
+  <div id="alert-area"></div>
+
+  <!-- explanation -->
+  <div class="alert alert-info" style="margin-bottom:1.5rem">
+    <strong>editor 権限</strong>とは、契約の作成・編集・送信、テンプレート管理、設定変更を行える権限です。
+    editor でないユーザーは閲覧のみ可能です。
+  </div>
+
+  <!-- editor list -->
+  <div class="card" style="margin-bottom:1.5rem;padding:0">
+    <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--gray-200);font-weight:700;font-size:.875rem">
+      現在の editor 一覧
+    </div>
+    <? if (editors.filter(function(e){return e.active}).length === 0) { ?>
+    <div class="empty"><p>editor がいません（異常な状態です）</p></div>
+    <? } else { ?>
+    <div class="table-wrap">
+      <table id="editors-table">
+        <thead>
+          <tr>
+            <th>メールアドレス</th>
+            <th>名前</th>
+            <th>追加日時</th>
+            <th>追加者</th>
+            <th style="width:90px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <? var activeEditors = editors.filter(function(e){ return e.active; }); ?>
+          <? for (var i = 0; i < activeEditors.length; i++) { var ed = activeEditors[i]; ?>
+          <tr id="editor-row-<?= i ?>">
+            <td style="font-weight:500">
+              <?= ed.email ?>
+              <? if (ed.email === currentUser.email) { ?>
+              <span class="badge" style="background:var(--gray-100);color:var(--gray-500);margin-left:.375rem">あなた</span>
+              <? } ?>
+            </td>
+            <td class="text-sm text-muted"><?= ed.name || '—' ?></td>
+            <td class="text-sm text-muted"><?= ed.added_at ? String(ed.added_at).slice(0,10) : '—' ?></td>
+            <td class="text-sm text-muted"><?= ed.added_by || '—' ?></td>
+            <td>
+              <? var isSelf = (ed.email === currentUser.email); ?>
+              <? var isLast = (activeEditors.length <= 1); ?>
+              <? if (!isSelf && !isLast) { ?>
+              <button class="btn btn-danger btn-sm"
+                onclick="removeEditor('<?= ed.email ?>')">削除</button>
+              <? } else { ?>
+              <button class="btn btn-secondary btn-sm" disabled
+                title="<?= isSelf ? '自分自身は削除できません' : '最後の editor は削除できません' ?>">削除</button>
+              <? } ?>
+            </td>
+          </tr>
+          <? } ?>
+        </tbody>
+      </table>
+    </div>
+    <? } ?>
+  </div>
+
+  <!-- add editor form -->
+  <div class="card">
+    <h3 style="font-size:.9rem;font-weight:700;margin-bottom:1rem">editor を追加する</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:.75rem;align-items:end">
+      <div class="form-group" style="margin:0">
+        <label class="required">メールアドレス</label>
+        <input type="email" id="new-editor-email" placeholder="user@example.com">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>名前（任意）</label>
+        <input type="text" id="new-editor-name" placeholder="例: 田中 太郎">
+      </div>
+      <button class="btn btn-primary" id="add-btn" onclick="addEditor()">追加</button>
+    </div>
+    <p class="form-hint" style="margin-top:.5rem">
+      追加するユーザーは組織の Google Workspace アカウントを持っている必要があります。
+    </p>
+  </div>
+</div>
+
+<?!= include('views/shared/ConfirmModal') ?>
+
+<script>
+function removeEditor(email) {
+  ConfirmModal.show({
+    title: 'editor を削除しますか？',
+    description: email + ' の編集権限を削除します。この操作は audit_log に記録されます。',
+    confirmLabel: '削除する',
+    confirmStyle: 'danger',
+    onConfirm: function() {
+      google.script.run
+        .withSuccessHandler(function() { location.reload(); })
+        .withFailureHandler(function(e) { showAlert('削除に失敗しました: ' + e.message, 'error'); })
+        .callServer('removeEditor', { email: email });
+    }
+  });
+}
+
+function addEditor() {
+  var email = document.getElementById('new-editor-email').value.trim();
+  var name  = document.getElementById('new-editor-name').value.trim();
+  if (!email) { showAlert('メールアドレスを入力してください', 'error'); return; }
+  if (!email.includes('@')) { showAlert('有効なメールアドレスを入力してください', 'error'); return; }
+
+  var btn = document.getElementById('add-btn');
+  btn.disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function() { location.reload(); })
+    .withFailureHandler(function(e) {
+      btn.disabled = false;
+      showAlert('追加に失敗しました: ' + e.message, 'error');
+    })
+    .callServer('addEditor', { email: email, name: name });
+}
+
+function showAlert(msg, type) {
+  document.getElementById('alert-area').innerHTML =
+    '<div class="alert alert-' + (type === 'error' ? 'error' : 'success') + '">' + msg + '</div>';
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>

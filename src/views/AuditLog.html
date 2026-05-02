@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<?!= include('views/shared/Styles') ?>
+</head>
+<body>
+<?!= include('views/shared/Nav') ?>
+
+<div class="container">
+  <div class="page-header">
+    <h1 class="page-title">監査ログ</h1>
+    <button class="btn btn-secondary" onclick="refreshLogs()">更新</button>
+  </div>
+
+  <!-- filter bar -->
+  <div class="card" style="margin-bottom:1rem;padding:.75rem 1rem">
+    <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:600;color:var(--gray-500);margin-bottom:.25rem">契約 ID</label>
+        <input type="text" id="f-contract-id" placeholder="例: C-001" style="width:110px;padding:.375rem .6rem;font-size:.8rem">
+      </div>
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:600;color:var(--gray-500);margin-bottom:.25rem">アクション</label>
+        <select id="f-action" style="padding:.375rem .6rem;font-size:.8rem">
+          <option value="">すべて</option>
+          <option>contract_created</option>
+          <option>contract_edited</option>
+          <option>contract_sent</option>
+          <option>contract_internal_signed</option>
+          <option>contract_completed</option>
+          <option>contract_rejected</option>
+          <option>contract_reminded</option>
+          <option>template_created</option>
+          <option>template_edited</option>
+          <option>template_deleted</option>
+          <option>editor_added</option>
+          <option>editor_removed</option>
+          <option>system_initialized</option>
+          <option>permission_denied</option>
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:600;color:var(--gray-500);margin-bottom:.25rem">操作者</label>
+        <input type="text" id="f-actor" placeholder="メールアドレス" style="width:180px;padding:.375rem .6rem;font-size:.8rem">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="applyFilter()">絞り込み</button>
+      <button class="btn btn-secondary btn-sm" onclick="clearFilter()">クリア</button>
+      <span id="log-count" class="text-muted text-sm" style="margin-left:auto"></span>
+    </div>
+  </div>
+
+  <!-- log table -->
+  <div class="card" style="padding:0">
+    <? if (logs.length === 0) { ?>
+    <div class="empty">
+      <div style="font-size:2rem">📋</div>
+      <p>ログがまだありません</p>
+    </div>
+    <? } else { ?>
+    <div class="table-wrap">
+      <table id="log-table">
+        <thead>
+          <tr>
+            <th style="width:160px">日時</th>
+            <th style="width:80px">契約 ID</th>
+            <th style="width:170px">アクション</th>
+            <th>説明</th>
+            <th style="width:170px">操作者</th>
+          </tr>
+        </thead>
+        <tbody id="log-tbody">
+          <? for (var i = 0; i < logs.length; i++) { var log = logs[i]; ?>
+          <tr class="log-row"
+              data-contract="<?= log.contract_id || '' ?>"
+              data-action="<?= log.action || '' ?>"
+              data-actor="<?= log.actor_email || '' ?>">
+            <td class="text-sm text-muted"><?= log.timestamp ? String(log.timestamp).slice(0,19).replace('T',' ') : '' ?></td>
+            <td>
+              <? if (log.contract_id) { ?>
+              <a href="?view=contract&id=<?= log.contract_id ?>"><?= log.contract_id ?></a>
+              <? } else { ?><span class="text-muted">—</span><? } ?>
+            </td>
+            <td><code style="font-size:.75rem;background:var(--gray-100);padding:.1rem .3rem;border-radius:3px"><?= log.action ?></code></td>
+            <td class="text-sm"><?= log.description ?></td>
+            <td class="text-sm text-muted"><?= log.actor_email ?></td>
+          </tr>
+          <? } ?>
+        </tbody>
+      </table>
+    </div>
+    <div id="load-more-wrap" style="padding:.75rem 1rem;text-align:center;border-top:1px solid var(--gray-200)">
+      <button class="btn btn-secondary btn-sm" onclick="loadMore()">さらに読み込む</button>
+    </div>
+    <? } ?>
+  </div>
+</div>
+
+<script>
+var allRows = Array.from(document.querySelectorAll('.log-row'));
+updateCount();
+
+function applyFilter() {
+  var contractId = document.getElementById('f-contract-id').value.trim().toUpperCase();
+  var action     = document.getElementById('f-action').value;
+  var actor      = document.getElementById('f-actor').value.trim().toLowerCase();
+
+  allRows.forEach(function(row) {
+    var match = true;
+    if (contractId && row.dataset.contract !== contractId) match = false;
+    if (action     && row.dataset.action !== action)       match = false;
+    if (actor      && !row.dataset.actor.includes(actor))  match = false;
+    row.style.display = match ? '' : 'none';
+  });
+  updateCount();
+}
+
+function clearFilter() {
+  document.getElementById('f-contract-id').value = '';
+  document.getElementById('f-action').value = '';
+  document.getElementById('f-actor').value = '';
+  allRows.forEach(function(r) { r.style.display = ''; });
+  updateCount();
+}
+
+function updateCount() {
+  var visible = allRows.filter(function(r) { return r.style.display !== 'none'; }).length;
+  document.getElementById('log-count').textContent = visible + ' 件表示中';
+}
+
+function refreshLogs() {
+  var contractId = document.getElementById('f-contract-id').value.trim() || null;
+  var action     = document.getElementById('f-action').value || null;
+  var filters = {};
+  if (contractId) filters.contract_id = contractId;
+  if (action)     filters.action = action;
+
+  google.script.run
+    .withSuccessHandler(function(newLogs) {
+      var tbody = document.getElementById('log-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = newLogs.map(function(log) {
+        var ts = log.timestamp ? String(log.timestamp).slice(0,19).replace('T',' ') : '';
+        var contractLink = log.contract_id
+          ? '<a href="?view=contract&id=' + esc(log.contract_id) + '">' + esc(log.contract_id) + '</a>'
+          : '<span class="text-muted">—</span>';
+        return '<tr class="log-row" data-contract="' + esc(log.contract_id||'') +
+               '" data-action="' + esc(log.action||'') +
+               '" data-actor="' + esc(log.actor_email||'') + '">' +
+               '<td class="text-sm text-muted">' + esc(ts) + '</td>' +
+               '<td>' + contractLink + '</td>' +
+               '<td><code style="font-size:.75rem;background:var(--gray-100);padding:.1rem .3rem;border-radius:3px">' + esc(log.action) + '</code></td>' +
+               '<td class="text-sm">' + esc(log.description) + '</td>' +
+               '<td class="text-sm text-muted">' + esc(log.actor_email) + '</td></tr>';
+      }).join('');
+      allRows = Array.from(document.querySelectorAll('.log-row'));
+      updateCount();
+    })
+    .withFailureHandler(function(e) { alert('更新に失敗しました: ' + e.message); })
+    .callServer('getAuditLog', { filters: filters });
+}
+
+function loadMore() {
+  // Load more via server — just reload for now (simple approach for v1.0)
+  location.reload();
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>

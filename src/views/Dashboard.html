@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<?!= include('views/shared/Styles') ?>
+</head>
+<body>
+<?!= include('views/shared/Nav') ?>
+
+<?
+var draft    = contracts.filter(function(c){ return c.status==='draft'; }).length;
+var internalS = contracts.filter(function(c){ return c.status==='internal_signing'; }).length;
+var externalS = contracts.filter(function(c){ return c.status==='external_signing'; }).length;
+?>
+
+<div class="container">
+  <div class="page-header">
+    <h1 class="page-title">ダッシュボード</h1>
+    <? if (currentUser.canEdit) { ?>
+    <a href="?view=new" class="btn btn-primary">＋ 新規契約</a>
+    <? } ?>
+  </div>
+
+  <!-- metrics -->
+  <div class="card-grid">
+    <div class="card" style="cursor:pointer" onclick="filterStatus('draft')">
+      <div class="metric-label">作成中</div>
+      <div class="metric-value"><?= draft ?></div>
+    </div>
+    <div class="card" style="cursor:pointer" onclick="filterStatus('internal_signing')">
+      <div class="metric-label">社内署名待ち</div>
+      <div class="metric-value"><?= internalS ?></div>
+    </div>
+    <div class="card" style="cursor:pointer" onclick="filterStatus('external_signing')">
+      <div class="metric-label">相手先署名待ち</div>
+      <div class="metric-value"><?= externalS ?></div>
+    </div>
+  </div>
+
+  <!-- filter bar -->
+  <div class="card" style="margin-bottom:1rem;padding:.75rem 1rem;">
+    <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:.8rem;color:var(--gray-500);">ステータス:</span>
+      <button class="btn btn-sm btn-primary" id="filter-all" onclick="filterStatus('')">すべて</button>
+      <button class="btn btn-sm btn-secondary" id="filter-draft" onclick="filterStatus('draft')">作成中</button>
+      <button class="btn btn-sm btn-secondary" id="filter-internal_signing" onclick="filterStatus('internal_signing')">社内署名待ち</button>
+      <button class="btn btn-sm btn-secondary" id="filter-external_signing" onclick="filterStatus('external_signing')">相手先署名待ち</button>
+      <button class="btn btn-sm btn-secondary" id="filter-signed" onclick="filterStatus('signed')">締結済</button>
+      <button class="btn btn-sm btn-secondary" id="filter-rejected" onclick="filterStatus('rejected')">却下</button>
+      <input type="text" id="search-input" placeholder="件名・相手先で検索" style="width:200px;padding:.3rem .6rem;font-size:.8rem;margin-left:auto" oninput="applyFilters()">
+    </div>
+  </div>
+
+  <!-- contract table -->
+  <div class="card" style="padding:0">
+    <? if (contracts.length === 0) { ?>
+    <div class="empty">
+      <div style="font-size:2rem">📄</div>
+      <p>契約はまだありません</p>
+      <? if (currentUser.canEdit) { ?>
+      <a href="?view=new" class="btn btn-primary" style="margin-top:1rem">＋ 新規契約を作成</a>
+      <? } ?>
+    </div>
+    <? } else { ?>
+    <div class="table-wrap">
+      <table id="contracts-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>件名</th>
+            <th>相手先</th>
+            <th>ステータス</th>
+            <th>作成日</th>
+            <th>作成者</th>
+          </tr>
+        </thead>
+        <tbody>
+          <? for (var i = 0; i < contracts.length; i++) { var c = contracts[i]; ?>
+          <tr class="contract-row" data-status="<?= c.status ?>" data-text="<?= (c.title + ' ' + c.counterparty_name).toLowerCase() ?>">
+            <td><a href="?view=contract&id=<?= c.id ?>"><?= c.id ?></a></td>
+            <td><a href="?view=contract&id=<?= c.id ?>"><?= c.title ?></a></td>
+            <td><?= c.counterparty_name ?></td>
+            <td><span class="badge badge-<?= c.status ?>"><?= STATUS_LABEL[c.status] || c.status ?></span></td>
+            <td class="text-muted text-sm"><?= c.created_at ? c.created_at.slice(0,10) : '' ?></td>
+            <td class="text-muted text-sm"><?= c.creator_email ?></td>
+          </tr>
+          <? } ?>
+        </tbody>
+      </table>
+    </div>
+    <? } ?>
+  </div>
+</div>
+
+<script>
+var STATUS_LABEL = {
+  draft: '作成中',
+  internal_signing: '社内署名待ち',
+  external_signing: '相手先署名待ち',
+  signed: '締結済',
+  rejected: '却下'
+};
+
+var currentStatus = '';
+
+function filterStatus(status) {
+  currentStatus = status;
+  // update button styles
+  ['all','draft','internal_signing','external_signing','signed','rejected'].forEach(function(s) {
+    var btn = document.getElementById('filter-' + s);
+    if (!btn) return;
+    btn.className = 'btn btn-sm ' + ((s === status || (s === 'all' && status === '')) ? 'btn-primary' : 'btn-secondary');
+  });
+  applyFilters();
+}
+
+function applyFilters() {
+  var search = (document.getElementById('search-input').value || '').toLowerCase();
+  document.querySelectorAll('.contract-row').forEach(function(row) {
+    var matchStatus = !currentStatus || row.dataset.status === currentStatus;
+    var matchSearch = !search || row.dataset.text.includes(search);
+    row.style.display = (matchStatus && matchSearch) ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>

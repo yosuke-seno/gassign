@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<?!= include('views/shared/Styles') ?>
+</head>
+<body>
+<?!= include('views/shared/Nav') ?>
+
+<div class="container" style="max-width:760px">
+  <div class="page-header">
+    <h1 class="page-title">新規契約作成</h1>
+    <a href="?view=dashboard" class="btn btn-secondary">キャンセル</a>
+  </div>
+
+  <!-- step indicator -->
+  <div class="steps">
+    <div class="step active" id="step-indicator-1">1. テンプレ選択</div>
+    <div class="step"        id="step-indicator-2">2. 情報入力</div>
+    <div class="step"        id="step-indicator-3">3. 確認</div>
+  </div>
+
+  <div id="alert-area"></div>
+
+  <!-- ===== STEP 1: template selection ===== -->
+  <div id="step-1">
+    <? if (templates.length === 0) { ?>
+    <div class="card">
+      <div class="empty">
+        <div style="font-size:2rem">📋</div>
+        <p>テンプレートが登録されていません</p>
+        <a href="?view=templates" class="btn btn-primary" style="margin-top:1rem">テンプレートを追加</a>
+      </div>
+    </div>
+    <? } else { ?>
+    <p class="text-muted" style="margin-bottom:1rem;font-size:.875rem">使用するテンプレートを選択してください。</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;margin-bottom:1.5rem">
+      <? for (var i = 0; i < templates.length; i++) { var t = templates[i]; ?>
+      <div class="card template-card" data-id="<?= t.template_id ?>" data-docsid="<?= t.docs_id ?>" data-name="<?= t.name ?>"
+           onclick="selectTemplate(this)"
+           style="cursor:pointer;transition:border-color .15s">
+        <div style="font-weight:600;margin-bottom:.25rem"><?= t.name ?></div>
+        <? if (t.category) { ?><div class="text-muted text-sm"><?= t.category ?></div><? } ?>
+        <? if (t.description) { ?><div style="font-size:.8rem;color:var(--gray-500);margin-top:.375rem"><?= t.description ?></div><? } ?>
+        <div class="text-sm text-muted" style="margin-top:.5rem">使用回数: <?= t.usage_count ?>回</div>
+      </div>
+      <? } ?>
+    </div>
+    <div style="display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" id="next-step1" onclick="goStep2()" disabled>次へ →</button>
+    </div>
+    <? } ?>
+  </div>
+
+  <!-- ===== STEP 2: form ===== -->
+  <div id="step-2" style="display:none">
+    <form id="contract-form" onsubmit="return false">
+      <!-- 基本情報 -->
+      <div class="card" style="margin-bottom:1rem">
+        <h3 style="font-size:.9rem;font-weight:700;margin-bottom:1rem;color:var(--gray-700)">基本情報</h3>
+        <div class="form-group">
+          <label class="required">件名</label>
+          <input type="text" id="f-title" required placeholder="例: 業務委託契約書 — 株式会社〇〇">
+        </div>
+        <div class="form-group">
+          <label class="required">相手先会社名</label>
+          <input type="text" id="f-counterparty-name" required placeholder="例: 株式会社サンプル">
+        </div>
+        <div class="form-group">
+          <label>相手先代表者</label>
+          <input type="text" id="f-counterparty-rep" placeholder="例: 代表取締役 山田太郎">
+          <p class="form-hint">省略可</p>
+        </div>
+      </div>
+
+      <!-- 署名者 -->
+      <div class="card" style="margin-bottom:1rem">
+        <h3 style="font-size:.9rem;font-weight:700;margin-bottom:1rem;color:var(--gray-700)">署名者</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+          <div>
+            <h4 style="font-size:.8rem;font-weight:600;color:var(--gray-500);margin-bottom:.75rem;text-transform:uppercase;letter-spacing:.05em">社内署名者</h4>
+            <? if (signers.length > 0) { ?>
+            <div class="form-group">
+              <label class="required">署名者を選択</label>
+              <select id="f-internal-signer" required onchange="fillInternalSigner(this)">
+                <option value="">— 選択してください —</option>
+                <? for (var s = 0; s < signers.length; s++) { var sg = signers[s]; ?>
+                <option value="<?= sg.email ?>" data-name="<?= sg.name ?>">
+                  <?= sg.name ?> (<?= sg.role || sg.email ?>)
+                </option>
+                <? } ?>
+              </select>
+            </div>
+            <? } else { ?>
+            <div class="form-group">
+              <label class="required">氏名</label>
+              <input type="text" id="f-internal-name" required placeholder="例: 瀬野 陽介">
+            </div>
+            <div class="form-group">
+              <label class="required">メールアドレス</label>
+              <input type="email" id="f-internal-email" required placeholder="例: boss@example.com">
+            </div>
+            <? } ?>
+          </div>
+          <div>
+            <h4 style="font-size:.8rem;font-weight:600;color:var(--gray-500);margin-bottom:.75rem;text-transform:uppercase;letter-spacing:.05em">相手先署名者</h4>
+            <div class="form-group">
+              <label class="required">氏名</label>
+              <input type="text" id="f-cp-signer-name" required placeholder="例: 佐藤 花子">
+            </div>
+            <div class="form-group">
+              <label class="required">メールアドレス</label>
+              <input type="email" id="f-cp-signer-email" required placeholder="例: contact@partner.com">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- テンプレ変数 -->
+      <div class="card" id="variables-card" style="margin-bottom:1rem;display:none">
+        <h3 style="font-size:.9rem;font-weight:700;margin-bottom:.25rem;color:var(--gray-700)">テンプレート変数</h3>
+        <p class="text-muted text-sm" style="margin-bottom:1rem">契約書テンプレート内の <code>{{変数名}}</code> に埋め込む値を入力してください。</p>
+        <div id="variables-fields"></div>
+      </div>
+
+      <!-- 備考 -->
+      <div class="card" style="margin-bottom:1.5rem">
+        <div class="form-group" style="margin-bottom:0">
+          <label>備考・タグ</label>
+          <input type="text" id="f-notes" placeholder="備考（任意）">
+          <input type="text" id="f-tags" placeholder="タグ（カンマ区切り、任意）" style="margin-top:.5rem">
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between">
+        <button type="button" class="btn btn-secondary" onclick="goStep1()">← 戻る</button>
+        <button type="button" class="btn btn-primary" onclick="goStep3()">確認 →</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ===== STEP 3: confirmation ===== -->
+  <div id="step-3" style="display:none">
+    <div class="card" style="margin-bottom:1.5rem">
+      <h3 style="font-size:.9rem;font-weight:700;margin-bottom:1rem;color:var(--gray-700)">入力内容の確認</h3>
+      <table style="width:100%;border-collapse:collapse">
+        <tbody id="confirm-table"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;justify-content:space-between">
+      <button class="btn btn-secondary" onclick="goStep2()">← 戻る</button>
+      <button class="btn btn-primary" id="submit-btn" onclick="confirmSubmit()">作成する</button>
+    </div>
+  </div>
+</div>
+
+<?!= include('views/shared/ConfirmModal') ?>
+
+<script>
+var selectedTemplate = null;
+var templateVariables = [];
+
+// ---- signers (pre-loaded from server) ----
+var hasSingerDropdown = <?= signers.length > 0 ? 'true' : 'false' ?>;
+
+function selectTemplate(card) {
+  document.querySelectorAll('.template-card').forEach(function(c) {
+    c.style.borderColor = '';
+    c.style.boxShadow = '';
+  });
+  card.style.borderColor = 'var(--primary)';
+  card.style.boxShadow = '0 0 0 2px #bfdbfe';
+  selectedTemplate = {
+    id: card.dataset.id,
+    docsId: card.dataset.docsid,
+    name: card.dataset.name
+  };
+  document.getElementById('next-step1').disabled = false;
+}
+
+function goStep1() {
+  setStep(1);
+}
+
+function goStep2() {
+  if (!selectedTemplate) return;
+  setStep(2);
+  // load template variables from Docs
+  if (selectedTemplate.docsId) {
+    google.script.run
+      .withSuccessHandler(renderVariableFields)
+      .withFailureHandler(function(e) { console.warn('変数取得失敗:', e.message); })
+      .callServer('extractVariables', { docId: selectedTemplate.docsId });
+  }
+}
+
+function goStep3() {
+  if (!validateStep2()) return;
+  buildConfirmTable();
+  setStep(3);
+}
+
+function setStep(n) {
+  [1,2,3].forEach(function(i) {
+    document.getElementById('step-' + i).style.display = (i === n) ? '' : 'none';
+    var ind = document.getElementById('step-indicator-' + i);
+    ind.className = 'step' + (i < n ? ' done' : i === n ? ' active' : '');
+  });
+}
+
+function fillInternalSigner(sel) {
+  var opt = sel.options[sel.selectedIndex];
+  sel.dataset.name = opt.dataset.name || '';
+}
+
+function renderVariableFields(vars) {
+  templateVariables = vars || [];
+  var container = document.getElementById('variables-fields');
+  var card = document.getElementById('variables-card');
+  container.innerHTML = '';
+  if (templateVariables.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  templateVariables.forEach(function(v) {
+    var g = document.createElement('div');
+    g.className = 'form-group';
+    g.innerHTML = '<label>' + escHtml(v) + '</label><input type="text" id="var-' + escAttr(v) + '" placeholder="{{' + escHtml(v) + '}} に入れる値">';
+    container.appendChild(g);
+  });
+}
+
+function validateStep2() {
+  var required = ['f-title','f-counterparty-name','f-cp-signer-name','f-cp-signer-email'];
+  if (!hasSingerDropdown) { required.push('f-internal-name','f-internal-email'); }
+  for (var i=0; i<required.length; i++) {
+    var el = document.getElementById(required[i]);
+    if (el && !el.value.trim()) {
+      showAlert('必須項目を入力してください。', 'error');
+      el.focus();
+      return false;
+    }
+  }
+  if (hasSingerDropdown && !document.getElementById('f-internal-signer').value) {
+    showAlert('社内署名者を選択してください。', 'error');
+    return false;
+  }
+  clearAlert();
+  return true;
+}
+
+function buildConfirmTable() {
+  var rows = [];
+  rows.push(['テンプレート', selectedTemplate.name]);
+  rows.push(['件名', val('f-title')]);
+  rows.push(['相手先会社名', val('f-counterparty-name')]);
+  if (val('f-counterparty-rep')) rows.push(['相手先代表者', val('f-counterparty-rep')]);
+  if (hasSingerDropdown) {
+    var sel = document.getElementById('f-internal-signer');
+    var opt = sel.options[sel.selectedIndex];
+    rows.push(['社内署名者', opt.text]);
+  } else {
+    rows.push(['社内署名者', val('f-internal-name') + ' <' + val('f-internal-email') + '>']);
+  }
+  rows.push(['相手先署名者', val('f-cp-signer-name') + ' <' + val('f-cp-signer-email') + '>']);
+  templateVariables.forEach(function(v) {
+    var el = document.getElementById('var-' + v);
+    if (el && el.value) rows.push(['{{' + v + '}}', el.value]);
+  });
+  if (val('f-notes')) rows.push(['備考', val('f-notes')]);
+  if (val('f-tags'))  rows.push(['タグ', val('f-tags')]);
+
+  var tbody = document.getElementById('confirm-table');
+  tbody.innerHTML = rows.map(function(r) {
+    return '<tr><td style="width:160px;font-weight:500;color:var(--gray-500);padding:.5rem 0;font-size:.875rem;border-bottom:1px solid var(--gray-100)">' + escHtml(r[0]) +
+           '</td><td style="padding:.5rem .5rem;border-bottom:1px solid var(--gray-100);font-size:.875rem">' + escHtml(r[1]) + '</td></tr>';
+  }).join('');
+}
+
+function confirmSubmit() {
+  ConfirmModal.show({
+    title: '契約を作成しますか？',
+    description: '契約書ドキュメントが Google Drive に作成されます。',
+    confirmLabel: '作成する',
+    onConfirm: submitContract
+  });
+}
+
+function submitContract() {
+  var btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = '作成中…';
+
+  var internalEmail, internalName;
+  if (hasSingerDropdown) {
+    var sel = document.getElementById('f-internal-signer');
+    internalEmail = sel.value;
+    internalName  = sel.options[sel.selectedIndex].dataset.name || '';
+  } else {
+    internalEmail = val('f-internal-email');
+    internalName  = val('f-internal-name');
+  }
+
+  var vars = {};
+  templateVariables.forEach(function(v) {
+    var el = document.getElementById('var-' + v);
+    if (el) vars[v] = el.value;
+  });
+
+  var params = {
+    title:                    val('f-title'),
+    template_id:              selectedTemplate.id,
+    counterparty_name:        val('f-counterparty-name'),
+    counterparty_rep:         val('f-counterparty-rep'),
+    counterparty_signer_email: val('f-cp-signer-email'),
+    counterparty_signer_name:  val('f-cp-signer-name'),
+    internal_signer_email:    internalEmail,
+    internal_signer_name:     internalName,
+    template_variables:       vars,
+    notes: val('f-notes'),
+    tags:  val('f-tags')
+  };
+
+  google.script.run
+    .withSuccessHandler(function(contractId) {
+      window.location.href = '?view=contract&id=' + contractId;
+    })
+    .withFailureHandler(function(e) {
+      showAlert('作成に失敗しました: ' + e.message, 'error');
+      btn.disabled = false;
+      btn.textContent = '作成する';
+    })
+    .callServer('createContractWithDoc', { params: params });
+}
+
+// ---- utils ----
+function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escAttr(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g,'_'); }
+function showAlert(msg, type) {
+  var a = document.getElementById('alert-area');
+  a.innerHTML = '<div class="alert alert-' + (type==='error'?'error':'info') + '">' + escHtml(msg) + '</div>';
+}
+function clearAlert() { document.getElementById('alert-area').innerHTML = ''; }
+</script>
+</body>
+</html>

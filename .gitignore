@@ -1,0 +1,15 @@
+# clasp — 各開発者の検証用プロジェクトID。絶対にコミットしない
+.clasp.json
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
