@@ -120,7 +120,7 @@ NEW_ID="生成されたSCRIPT_ID"
 jq ".scriptId = \"$NEW_ID\"" release.config.json > tmp.json && mv tmp.json release.config.json
 
 # README のコピーリンクを更新
-sed -i.bak "s|REPLACE_WITH_PRODUCTION_SCRIPT_ID|$NEW_ID|g" README.md
+sed -i.bak "s|15V9FPuzkNj7Cetguhl4SxM0r-YDq_ZAVFavqISaMQumWz-3Ea6NTOACT|$NEW_ID|g" README.md
 rm README.md.bak
 ```
 
