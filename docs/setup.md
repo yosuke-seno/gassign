@@ -259,7 +259,8 @@ clasp open
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/documents",
     "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/userinfo.email"
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/script.scriptapp"
   ]
 }
 ```
@@ -267,6 +268,7 @@ clasp open
 これらの権限が必要です：
 - Drive、Sheets、Docs、Gmail への読み書き
 - ユーザーの Email アドレス取得（権限判定のため）
+- トリガーの設置（監査ログ保護・毎朝の状態同期のため）
 
 ---
 
